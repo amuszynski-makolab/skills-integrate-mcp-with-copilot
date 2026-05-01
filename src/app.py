@@ -5,19 +5,44 @@ A super simple FastAPI application that allows students to view and sign up
 for extracurricular activities at Mergington High School.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Cookie, Depends, FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
+from typing import Optional
 import os
+import json
+import secrets
 from pathlib import Path
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
 
+SESSION_COOKIE_NAME = "admin_session"
+admin_sessions = {}
+
 # Mount the static files directory
 current_dir = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=os.path.join(Path(__file__).parent,
           "static")), name="static")
+
+
+def load_admin_users():
+    users_file = current_dir / "admin_users.json"
+    if not users_file.exists():
+        return {}
+
+    with open(users_file, "r", encoding="utf-8") as file:
+        data = json.load(file)
+
+    return {
+        user["username"]: user["password"]
+        for user in data.get("teachers", [])
+        if "username" in user and "password" in user
+    }
+
+
+admin_users = load_admin_users()
 
 # In-memory activity database
 activities = {
@@ -78,6 +103,18 @@ activities = {
 }
 
 
+class AdminCredentials(BaseModel):
+    username: str
+    password: str
+
+
+def require_admin(session_token: Optional[str] = Cookie(default=None, alias=SESSION_COOKIE_NAME)):
+    username = admin_sessions.get(session_token)
+    if not username:
+        raise HTTPException(status_code=401, detail="Admin login required")
+    return username
+
+
 @app.get("/")
 def root():
     return RedirectResponse(url="/static/index.html")
@@ -88,8 +125,43 @@ def get_activities():
     return activities
 
 
+@app.get("/admin/session")
+def get_admin_session(session_token: Optional[str] = Cookie(default=None, alias=SESSION_COOKIE_NAME)):
+    username = admin_sessions.get(session_token)
+    return {
+        "authenticated": bool(username),
+        "username": username
+    }
+
+
+@app.post("/admin/login")
+def admin_login(credentials: AdminCredentials, response: Response):
+    expected_password = admin_users.get(credentials.username)
+    if expected_password != credentials.password:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    session_token = secrets.token_urlsafe(32)
+    admin_sessions[session_token] = credentials.username
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=session_token,
+        httponly=True,
+        samesite="lax",
+        max_age=60 * 60 * 8,
+    )
+    return {"message": "Logged in successfully", "username": credentials.username}
+
+
+@app.post("/admin/logout")
+def admin_logout(response: Response, session_token: Optional[str] = Cookie(default=None, alias=SESSION_COOKIE_NAME)):
+    if session_token in admin_sessions:
+        del admin_sessions[session_token]
+    response.delete_cookie(SESSION_COOKIE_NAME)
+    return {"message": "Logged out"}
+
+
 @app.post("/activities/{activity_name}/signup")
-def signup_for_activity(activity_name: str, email: str):
+def signup_for_activity(activity_name: str, email: str, admin: str = Depends(require_admin)):
     """Sign up a student for an activity"""
     # Validate activity exists
     if activity_name not in activities:
@@ -111,7 +183,7 @@ def signup_for_activity(activity_name: str, email: str):
 
 
 @app.delete("/activities/{activity_name}/unregister")
-def unregister_from_activity(activity_name: str, email: str):
+def unregister_from_activity(activity_name: str, email: str, admin: str = Depends(require_admin)):
     """Unregister a student from an activity"""
     # Validate activity exists
     if activity_name not in activities:
