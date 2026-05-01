@@ -16,12 +16,32 @@ body {
 }
 
 header {
+  position: relative;
   text-align: center;
   padding: 20px 0;
   margin-bottom: 30px;
   background-color: #1a237e;
   color: white;
   border-radius: 5px;
+}
+
+.admin-menu-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background-color: rgba(255, 255, 255, 0.15);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-menu-btn:hover {
+  background-color: rgba(255, 255, 255, 0.25);
 }
 
 header h1 {
@@ -190,6 +210,38 @@ button:hover {
 
 .hidden {
   display: none;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+}
+
+.modal-content {
+  width: 100%;
+  max-width: 420px;
+  background-color: white;
+  border-radius: 8px;
+  padding: 20px;
+  position: relative;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.modal-close-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  font-size: 14px;
+  padding: 0;
 }
 
 footer {
